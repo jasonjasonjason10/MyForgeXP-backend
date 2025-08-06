@@ -57,14 +57,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
-// ============= ✅ CATCH-ALL GOES LAST ================
-// (Only for serving frontend after build)
-app.use(express.static(path.join(__dirname, "../front-end/dist")));
-
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "../front-end/dist/index.html"));
-});
-
 // ============= Start server ================
 app.listen(3000, () => {
   console.log("server running on port 3000");
