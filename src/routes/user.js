@@ -1,27 +1,30 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../../prisma");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
+
 const jwt = require("jsonwebtoken");
 const tokenAuth = require("../middleware/TokenAuth");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 
-const {
-  S3Client,
-  DeleteObjectCommand,
-} = require("@aws-sdk/client-s3");
+const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 
-const s3 = new S3Client({ region: process.env.AWS_REGION, credentials: {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-} });
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
 const BUCKET = process.env.S3_BUCKET;
 const REGION = process.env.AWS_REGION;
 const PUBLIC_BASE = `https://${BUCKET}.s3.${REGION}.amazonaws.com`;
 
-const defaultAvatar = "https://forgexp-bucket.s3.us-east-2.amazonaws.com/images/pfp/default-avatar.png";
-const DEFAULT_AVATAR_URL = defaultAvatar
+const defaultAvatar =
+  "https://forgexp-bucket.s3.us-east-2.amazonaws.com/images/pfp/default-avatar.png";
+const DEFAULT_AVATAR_URL = defaultAvatar;
 
 function buildPublicUrl(key) {
   return `${PUBLIC_BASE}/${key}`;
@@ -195,7 +198,7 @@ router.get("/all/info", async (req, res) => {
   const allUsers = await prisma.user.findMany({
     select: {
       id: true,
-      username: true
+      username: true,
     },
   });
 
@@ -397,11 +400,11 @@ router.patch("/upgrade/:id", tokenAuth, async (req, res) => {
 });
 
 // change your avatar ========================================
-router.patch('/avatar', tokenAuth, async (req, res, next) => {
+router.patch("/avatar", tokenAuth, async (req, res, next) => {
   try {
     const userId = req.userId;
     if (!userId) {
-      return res.status(400).json({ error: 'Invalid user ID' });
+      return res.status(400).json({ error: "Invalid user ID" });
     }
 
     // Accept either an S3 key or a full URL
@@ -409,13 +412,13 @@ router.patch('/avatar', tokenAuth, async (req, res, next) => {
     if (!avatarKey && !avatarUrl) {
       return res
         .status(400)
-        .json({ error: 'Provide either avatarKey or avatarUrl' });
+        .json({ error: "Provide either avatarKey or avatarUrl" });
     }
 
     // Fetch the user
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
     // If they already had a non-default S3 avatar, delete old object
@@ -424,19 +427,15 @@ router.patch('/avatar', tokenAuth, async (req, res, next) => {
       user.avatar !== DEFAULT_AVATAR_URL &&
       user.avatar.includes(`${BUCKET}.s3.${REGION}.amazonaws.com/`)
     ) {
-      const match   = user.avatar.match(/\/([^/]+)$/);
-      const oldKey  = match?.[1];
+      const match = user.avatar.match(/\/([^/]+)$/);
+      const oldKey = match?.[1];
       if (oldKey) {
-        await s3.send(
-          new DeleteObjectCommand({ Bucket: BUCKET, Key: oldKey })
-        );
+        await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: oldKey }));
       }
     }
 
     // Determine the new avatar URL
-    const newAvatar = avatarKey
-      ? buildPublicUrl(avatarKey)
-      : avatarUrl;
+    const newAvatar = avatarKey ? buildPublicUrl(avatarKey) : avatarUrl;
 
     // Update in database
     await prisma.user.update({
@@ -446,7 +445,7 @@ router.patch('/avatar', tokenAuth, async (req, res, next) => {
 
     // Return the new URL
     return res.status(200).json({
-      successMessage: 'Avatar updated successfully',
+      successMessage: "Avatar updated successfully",
       avatar: newAvatar,
     });
   } catch (err) {
@@ -464,11 +463,15 @@ router.get("/:id", async (req, res) => {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { communities: true, favorites: true, posts: {
-      include: {
-        likes: true
-      }
-    }},
+    include: {
+      communities: true,
+      favorites: true,
+      posts: {
+        include: {
+          likes: true,
+        },
+      },
+    },
   });
 
   if (!user) {
@@ -484,7 +487,7 @@ router.get("/:id", async (req, res) => {
     createdAt: user.createdAt,
     favorites: user.favorites,
     posts: user.posts,
-    bio: user.bio
+    bio: user.bio,
   };
 
   res.status(200).json({
