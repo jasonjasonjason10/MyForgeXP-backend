@@ -10,10 +10,15 @@ const prisma = require("./prisma"); // ✅ Moved to top so it's available earlie
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173"], // Vite dev server
+    origin: [
+      "http://localhost:5173",
+      "https://www.forgexp.net",
+      "https://forgexp.net",
+    ],
     credentials: true,
   })
 );
+
 app.use(express.json());
 app.use(morgan("dev"));
 
