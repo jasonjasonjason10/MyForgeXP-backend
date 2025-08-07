@@ -419,7 +419,7 @@ router.patch(
 
       let newAvatarUrl = null;
 
-      // 🟩 Option 1: Upload via file
+      // upload avatar via file
       if (req.file) {
         const fileExt = path.extname(req.file.originalname);
         const key = `images/pfp/${crypto.randomUUID()}${fileExt}`;
