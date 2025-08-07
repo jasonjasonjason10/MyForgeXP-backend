@@ -399,59 +399,87 @@ router.patch("/upgrade/:id", tokenAuth, async (req, res) => {
   }
 });
 
-// change your avatar ========================================
-router.patch("/avatar", tokenAuth, async (req, res, next) => {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(400).json({ error: "Invalid user ID" });
-    }
+const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const crypto = require("crypto");
 
-    // Accept either an S3 key or a full URL
-    const { avatarKey, avatarUrl } = req.body;
-    if (!avatarKey && !avatarUrl) {
-      return res
-        .status(400)
-        .json({ error: "Provide either avatarKey or avatarUrl" });
-    }
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-    // Fetch the user
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+router.patch(
+  "/avatar",
+  tokenAuth,
+  upload.single("avatar"),
+  async (req, res, next) => {
+    try {
+      const userId = req.userId;
+      if (!userId) return res.status(400).json({ error: "Invalid user ID" });
 
-    // If they already had a non-default S3 avatar, delete old object
-    if (
-      user.avatar &&
-      user.avatar !== DEFAULT_AVATAR_URL &&
-      user.avatar.includes(`${BUCKET}.s3.${REGION}.amazonaws.com/`)
-    ) {
-      const match = user.avatar.match(/\/([^/]+)$/);
-      const oldKey = match?.[1];
-      if (oldKey) {
-        await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: oldKey }));
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      let newAvatarUrl = null;
+
+      // 🟩 Option 1: Upload via file
+      if (req.file) {
+        const fileExt = path.extname(req.file.originalname);
+        const key = `images/pfp/${crypto.randomUUID()}${fileExt}`;
+
+        const uploadCommand = new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        });
+
+        await s3.send(uploadCommand);
+        newAvatarUrl = buildPublicUrl(key);
       }
+
+      // 🟨 Option 2: Provide avatarUrl (like from a web link or S3 pre-upload)
+      if (!newAvatarUrl && req.body.avatarUrl) {
+        newAvatarUrl = req.body.avatarUrl;
+      }
+
+      if (!newAvatarUrl) {
+        return res.status(400).json({
+          error: "No avatar file or URL provided",
+        });
+      }
+
+      // 🔄 Delete old avatar if needed
+      if (
+        user.avatar &&
+        user.avatar !== DEFAULT_AVATAR_URL &&
+        user.avatar.includes(`${BUCKET}.s3.${REGION}.amazonaws.com/`)
+      ) {
+        const match = user.avatar.match(/\/([^/]+)$/);
+        const oldKey = match?.[1];
+        if (oldKey) {
+          await s3.send(
+            new DeleteObjectCommand({
+              Bucket: BUCKET,
+              Key: `images/pfp/${oldKey}`,
+            })
+          );
+        }
+      }
+
+      // ✅ Update DB
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { avatar: newAvatarUrl },
+      });
+
+      res.status(200).json({
+        successMessage: "Avatar updated!",
+        avatar: updatedUser.avatar,
+      });
+    } catch (err) {
+      console.error("Avatar update error:", err);
+      next(err);
     }
-
-    // Determine the new avatar URL
-    const newAvatar = avatarKey ? buildPublicUrl(avatarKey) : avatarUrl;
-
-    // Update in database
-    await prisma.user.update({
-      where: { id: userId },
-      data: { avatar: newAvatar },
-    });
-
-    // Return the new URL
-    return res.status(200).json({
-      successMessage: "Avatar updated successfully",
-      avatar: newAvatar,
-    });
-  } catch (err) {
-    next(err);
   }
-});
+);
 
 // !!!!!JASON added this, the get user info by id function is for fetching the currently logged in users info!!!!!// also, i moved it to the very bottom because if it reads this first then My Account page breaks.
 router.get("/:id", async (req, res) => {

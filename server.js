@@ -4,6 +4,8 @@ const express = require("express");
 const morgan = require("morgan");
 const app = express();
 require("dotenv").config();
+const fileUpload = require("express-fileupload");
+
 
 const prisma = require("./prisma"); // ✅ Moved to top so it's available earlier
 
@@ -20,6 +22,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(fileUpload())
 app.use(morgan("dev"));
 
 // ============= Routes ================
